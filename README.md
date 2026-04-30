@@ -1,2 +1,2 @@
 # Mech. Engg.
-A responsive engineering-focused  Interactive Platform Sowcase mechanical engineering concepts, projects, and technical applications 
+A responsive engineering-focused  Interactive Platform Showcasing mechanical engineering concepts, projects, and technical applications 
