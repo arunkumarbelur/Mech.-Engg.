@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Four-Bar Linkage - Top-Aligned Layout</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #f8fafc; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            margin: 0; 
+            padding: 5px 0 0 0; /* Minimal top padding */
+        }
+        .container { 
+            display: flex; 
+            gap: 15px; 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05); 
+            border: 1px solid #e2e8f0;
+        }
+        canvas { background: #ffffff; border-radius: 6px; }
+        .controls { width: 280px; display: flex; flex-direction: column; gap: 8px; }
+        .control-group { display: flex; flex-direction: column; }
+        label { font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 2px; }
+        input[type="range"] { cursor: pointer; accent-color: #4f46e5; height: 16px; }
+        
+        .direction-box { display: flex; gap: 8px; }
+        .dir-btn { flex: 1; padding: 5px; border: 1px solid #cbd5e1; background: white; border-radius: 4px; cursor: pointer; font-size: 0.7rem; font-weight: bold; }
+        .dir-btn.active { background: #4f46e5; color: white; border-color: #4f46e5; }
+
+        .stats { margin-top: 5px; padding: 10px; background: #f1f5f9; border-radius: 6px; font-size: 0.85rem; }
+        .warning { color: #ef4444; font-weight: bold; font-size: 0.7rem; padding: 6px; background: #fef2f2; border-radius: 4px; display: none; }
+        button.reset-trace { padding: 6px; background: #334155; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; margin-top: 2px; }
+        h3 { margin: 0 0 5px 0; font-size: 1rem; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Visual Simulation -->
+        <canvas id="canvas" width="600" height="480"></canvas>
+
+        <!-- Sidebar Controls -->
+        <div class="controls">
+            <h3>Linkage Controls</h3>
+            
+            <div class="control-group">
+                <label>Direction</label>
+                <div class="direction-box">
+                    <button class="dir-btn active" id="btn-ccw">CCW</button>
+                    <button class="dir-btn" id="btn-cw">CW</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Speed (ω): <span id="val-speed">2</span></label>
+                <input type="range" id="speed" min="0" max="10" step="0.5" value="2">
+            </div>
+
+            <div class="control-group">
+                <label>Ground (L1): <span id="val-l1">180</span></label>
+                <input type="range" id="l1" min="100" max="250" value="180">
+            </div>
+
+            <div class="control-group">
+                <label>Crank (L2): <span id="val-l2">60</span></label>
+                <input type="range" id="l2" min="20" max="100" value="60">
+            </div>
+
+            <div class="control-group">
+                <label>Coupler (L3): <span id="val-l3">200</span></label>
+                <input type="range" id="l3" min="100" max="300" value="200">
+            </div>
+
+            <div class="control-group">
+                <label>Rocker (L4): <span id="val-l4">180</span></label>
+                <input type="range" id="l4" min="100" max="300" value="180">
+            </div>
+
+            <button class="reset-trace" onclick="clearTraces()">Clear Traces</button>
+
+            <div id="grashof-warning" class="warning">⚠️ Grashof Error: Locked.</div>
+
+            <div class="stats">
+                <strong>Oscillator Point (B)</strong>
+                <div style="display:flex; justify-content: space-between; margin-top: 3px;">
+                    <span>Vel: <b id="stat-v">0</b></span>
+                    <span>Acc: <b id="stat-a">0</b></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const params = { speed: 2, l1: 180, l2: 60, l3: 200, l4: 180, direction: 1 };
+    let pathA = []; let pathB = []; 
+
+    function clearTraces() { pathA = []; pathB = []; }
+
+    ['speed', 'l1', 'l2', 'l3', 'l4'].forEach(id => {
+        const el = document.getElementById(id);
+        el.oninput = (e) => {
+            params[id] = parseFloat(e.target.value);
+            document.getElementById(`val-${id}`).innerText = e.target.value;
+            clearTraces(); 
+        };
+    });
+
+    document.getElementById('btn-ccw').onclick = function() { params.direction = 1; updateButtons(this); };
+    document.getElementById('btn-cw').onclick = function() { params.direction = -1; updateButtons(this); };
+
+    function updateButtons(activeBtn) {
+        document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+        activeBtn.classList.add('active');
+    }
+
+    let theta2 = 0; let lastV = 0, lastTime = performance.now(), lastBx = 0, lastBy = 0;
+
+    function animate(currentTime) {
+        const dt = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const ox = 180, oy = 250; // Shifted origin slightly for the 480px height canvas
+        const { l1, l2, l3, l4, speed, direction } = params;
+
+        const links = [l1, l2, l3, l4].sort((a,b) => a-b);
+        const isGrashof = (links[0] + links[3]) <= (links[1] + links[2]);
+        document.getElementById('grashof-warning').style.display = isGrashof ? 'none' : 'block';
+
+        theta2 += (direction * speed) * dt;
+        
+        const Ax = ox + l2 * Math.cos(theta2);
+        const Ay = oy - l2 * Math.sin(theta2);
+        const Dx = ox + l1, Dy = oy;
+
+        const distAD = Math.sqrt((Dx - Ax)**2 + (Dy - Ay)**2);
+        
+        if (distAD >= Math.abs(l3 - l4) && distAD <= (l3 + l4)) {
+            const a = (l3**2 - l4**2 + distAD**2) / (2 * distAD);
+            const h = Math.sqrt(Math.max(0, l3**2 - a**2));
+            const x2 = Ax + a * (Dx - Ax) / distAD;
+            const y2 = Ay + a * (Dy - Ay) / distAD;
+            const Bx = x2 - h * (Dy - Ay) / distAD;
+            const By = y2 + h * (Dx - Ax) / distAD;
+
+            if (speed > 0) {
+                pathA.push({x: Ax, y: Ay}); pathB.push({x: Bx, y: By});
+                if (pathA.length > 400) { pathA.shift(); pathB.shift(); }
+            }
+
+            drawPath(pathA, "#94a3b8"); drawPath(pathB, "#94a3b8");
+            drawLine(ox, oy, Ax, Ay, "#4f46e5", 5); 
+            drawLine(Ax, Ay, Bx, By, "#10b981", 5); 
+            drawLine(Bx, By, Dx, Dy, "#f59e0b", 5); 
+            drawLine(ox, oy, Dx, Dy, "#cbd5e1", 3); 
+            drawJoint(ox, oy); drawJoint(Dx, Dy); drawJoint(Ax, Ay); drawJoint(Bx, By);
+
+            if (dt > 0) {
+                const velocity = Math.sqrt(((Bx - lastBx) / dt)**2 + ((By - lastBy) / dt)**2);
+                const acceleration = Math.abs(velocity - lastV) / dt;
+                document.getElementById('stat-v').innerText = velocity.toFixed(0);
+                document.getElementById('stat-a').innerText = acceleration.toFixed(0);
+                lastBx = Bx; lastBy = By; lastV = velocity;
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    function drawPath(points, color) {
+        if (points.length < 2) return;
+        ctx.beginPath(); ctx.setLineDash([2, 4]); ctx.strokeStyle = color; ctx.lineWidth = 1;
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    function drawLine(x1, y1, x2, y2, color, width) {
+        ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round";
+        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+
+    function drawJoint(x, y) {
+        ctx.beginPath(); ctx.fillStyle = "#1e293b"; ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    requestAnimationFrame(animate);
+</script>
+</body>
+</html>
