@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Convex Lens Lab</title>
+    <style>
+        :root {
+            --primary: #2C3E50;
+            --secondary: #34495E;
+            --accent: #3498DB;
+            --bg: #F8F9FA;
+            --card-bg: #FFFFFF;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .app-container {
+            max-width: 1000px;
+            width: 100%;
+            display: grid;
+            gap: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h1, h2, h3 { margin: 0 0 10px 0; }
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #E9ECEF;
+        }
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-box { width: 16px; height: 16px; border-radius: 4px; }
+        .line-box { width: 20px; height: 4px; }
+        .dashed-box { width: 20px; height: 0; border-top: 3px dashed; }
+        
+        canvas {
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #DEE2E6;
+            border-radius: 8px;
+        }
+        /* Controls */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        label { font-weight: bold; display: flex; justify-content: space-between; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        
+        /* Math & Theory Panels */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .live-math {
+            background: #EBF5FB;
+            border-left: 5px solid var(--accent);
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+        .theory-section {
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .theory-section ul { margin: 5px 0; padding-left: 20px; }
+        .highlight { color: #E74C3C; font-weight: bold; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem;}
+        th, td { border: 1px solid #DEE2E6; padding: 6px; text-align: left; }
+        th { background-color: #F1F3F5; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <h1>Convex Lens Optics Lab</h1>
+        <p>Interactive ray tracing with live mathematical calculations.</p>
+    </div>
+
+    <div class="card">
+        <div class="legend">
+            <div class="legend-item"><div class="color-box" style="background:#E74C3C"></div> Object</div>
+            <div class="legend-item"><div class="color-box" style="background:#2ECC71"></div> Real Image</div>
+            <div class="legend-item"><div class="color-box" style="background:rgba(46, 204, 113, 0.5); border: 1px dashed #27AE60"></div> Virtual Image</div>
+            <div class="legend-item"><div class="line-box" style="background:#F39C12"></div> Parallel Ray</div>
+            <div class="legend-item"><div class="line-box" style="background:#9B59B6"></div> Central Ray</div>
+            <div class="legend-item"><div class="dashed-box" style="border-color:#7F8C8D"></div> Virtual Ray Trace</div>
+        </div>
+        
+        <canvas id="lensCanvas" width="900" height="400"></canvas>
+    </div>
+
+    <div class="card controls-grid">
+        <div class="control-group">
+            <label>Object Position (u): <span id="u-val">-200 cm</span></label>
+            <input type="range" id="objectPos" min="-400" max="-10" value="-200">
+            <small>Negative value based on Cartesian sign convention.</small>
+        </div>
+        <div class="control-group">
+            <label>Focal Length (f): <span id="f-val">100 cm</span></label>
+            <input type="range" id="focalLength" min="50" max="150" value="100">
+            <small>Distance from optical center to principal focus.</small>
+        </div>
+        <div class="control-group">
+            <label>Object Height (h<sub>o</sub>): <span id="h-val">60 cm</span></label>
+            <input type="range" id="objectHeight" min="20" max="120" value="60">
+        </div>
+    </div>
+
+    <div class="info-grid">
+        <div class="card theory-section">
+            <h3>Live Calculations</h3>
+            <p><strong>Result:</strong> <span id="conclusion" class="highlight">Real, Inverted, Diminished</span></p>
+            <div class="live-math" id="math-panel">
+                1/f = 1/v - 1/u<br>
+                1/100 = 1/v - 1/(-200)<br>
+                v = 200 cm<br><br>
+                Magnification (m) = v/u<br>
+                m = 200 / -200 = -1.00
+            </div>
+            <p><small>* Positive <strong>v</strong> means a Real Image (right side). Negative <strong>v</strong> means a Virtual Image (left side).</small></p>
+        </div>
+
+        <div class="card theory-section">
+            <h3>Ray Tracing Rules Used</h3>
+            <ul>
+                <li><strong>Parallel Ray (Orange):</strong> Travels parallel to the principal axis and refracts through the far focal point (F2).</li>
+                <li><strong>Central Ray (Purple):</strong> Passes straight through the optical center without bending.</li>
+            </ul>
+            <h3>Image Formation Guide</h3>
+            <table>
+                <tr><th>Object Position</th><th>Image Nature</th></tr>
+                <tr><td>Beyond 2F1</td><td>Real, Inverted, Diminished</td></tr>
+                <tr><td>Exactly at 2F1</td><td>Real, Inverted, Same Size</td></tr>
+                <tr><td>Between 2F1 & F1</td><td>Real, Inverted, Magnified</td></tr>
+                <tr><td>Exactly at F1</td><td>No Image (Infinity)</td></tr>
+                <tr><td>Between F1 & Lens</td><td>Virtual, Upright, Magnified</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('lensCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Elements
+    const uSlider = document.getElementById('objectPos');
+    const fSlider = document.getElementById('focalLength');
+    const hSlider = document.getElementById('objectHeight');
+    const uVal = document.getElementById('u-val');
+    const fVal = document.getElementById('f-val');
+    const hVal = document.getElementById('h-val');
+    const conclusionText = document.getElementById('conclusion');
+    const mathPanel = document.getElementById('math-panel');
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerY = height / 2;
+    const centerX = width / 2;
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+        
+        let u = parseFloat(uSlider.value); 
+        let f = parseFloat(fSlider.value);
+        let h_o = parseFloat(hSlider.value);
+
+        // Update Slider Labels
+        uVal.innerText = u + " cm";
+        fVal.innerText = f + " cm";
+        hVal.innerText = h_o + " cm";
+        
+        // Lens Formula: 1/f = 1/v - 1/u  => 1/v = 1/f + 1/u => v = (f*u)/(u+f)
+        let v;
+        if (Math.abs(u + f) < 0.1) {
+            v = Infinity; 
+        } else {
+            v = (u * f) / (u + f);
+        }
+
+        // Magnification formula: m = v/u
+        let m = v / u;
+        let h_i = h_o * m;
+
+        drawGrid(f);
+        drawLens(f);
+        drawObjectAndImage(u, v, h_o, h_i, f);
+        drawRays(u, v, h_o, h_i, f);
+        updateCalculations(u, v, f, m, h_i);
+    }
+
+    function drawGrid(f) {
+        // Principal Axis
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(width, centerY);
+        ctx.strokeStyle = '#BDC3C7';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#2C3E50';
+        ctx.font = "bold 14px sans-serif";
+        
+        // Draw Optical Center
+        ctx.fillText("O", centerX + 5, centerY - 10);
+
+        // Draw Focal Points
+        drawPoint(centerX - f, "F1");
+        drawPoint(centerX - (f*2), "2F1");
+        drawPoint(centerX + f, "F2");
+        drawPoint(centerX + (f*2), "2F2");
+    }
+
+    function drawPoint(x, label) {
+        ctx.beginPath();
+        ctx.arc(x, centerY, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillText(label, x - 12, centerY + 20);
+    }
+
+    function drawLens(f) {
+        ctx.beginPath();
+        let thickness = 35 - (f / 10); 
+        ctx.ellipse(centerX, centerY, Math.max(8, thickness), 160, 0, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = '#3498DB';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    function drawArrow(x, y, h, color, label, isDashed=false) {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - h);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        if (isDashed) ctx.setLineDash([6, 6]);
+        else ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(x, y - h);
+        ctx.lineTo(x - 6, y - h + (h > 0 ? 12 : -12));
+        ctx.lineTo(x + 6, y - h + (h > 0 ? 12 : -12));
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        if(label) {
+            ctx.fillStyle = color;
+            ctx.font = "bold 14px sans-serif";
+            ctx.fillText(label, x - 20, y - h + (h > 0 ? -15 : 25));
+        }
+    }
+
+    function drawObjectAndImage(u, v, h_o, h_i, f) {
+        drawArrow(centerX + u, centerY, h_o, '#E74C3C', 'Object');
+        
+        if (v !== Infinity) {
+            let isVirtual = u > -f;
+            let imgColor = isVirtual ? 'rgba(46, 204, 113, 0.6)' : '#2ECC71';
+            drawArrow(centerX + v, centerY, h_i, imgColor, 'Image', isVirtual);
+        }
+    }
+
+    function drawLine(x1, y1, x2, y2, color, isDashed = false) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        if (isDashed) ctx.setLineDash([5, 5]);
+        else ctx.setLineDash([]);
+        ctx.stroke();
+        ctx.setLineDash([]); 
+    }
+
+    function drawRays(u, v, h_o, h_i, f) {
+        const objX = centerX + u;
+        const objY = centerY - h_o;
+        let isVirtual = u > -f;
+
+        // Ray 1: Parallel to axis, refracts through F2 (Orange)
+        drawLine(objX, objY, centerX, objY, '#F39C12'); 
+        if (v !== Infinity) {
+             drawLine(centerX, objY, centerX + v, centerY - h_i, '#F39C12');
+             // Virtual trace back
+             if (isVirtual) drawLine(centerX, objY, centerX + v, centerY - h_i, '#7F8C8D', true);
+        } else {
+             // Parallel rays at infinity
+             drawLine(centerX, objY, width, centerY - (objY - centerY) * (width - centerX)/f, '#F39C12');
+        }
+
+        // Ray 2: Straight through optical center (Purple)
+        if (v !== Infinity) {
+            drawLine(objX, objY, centerX + v, centerY - h_i, '#9B59B6');
+            if(isVirtual) drawLine(objX, objY, centerX + v, centerY - h_i, '#7F8C8D', true);
+        } else {
+            drawLine(objX, objY, width, centerY - h_o * (width - objX)/Math.abs(u), '#9B59B6');
+        }
+    }
+
+    function updateCalculations(u, v, f, m, h_i) {
+        if (v === Infinity) {
+            conclusionText.innerText = "No Image Forms (Object at Infinity)";
+            conclusionText.style.color = "#E74C3C";
+            mathPanel.innerHTML = `
+                1/f = 1/v - 1/u <br>
+                1/${f} = 1/v - 1/(${u}) <br>
+                1/v = 0 <br>
+                <strong>v = Infinity (Rays are parallel)</strong>
+            `;
+            return;
+        }
+
+        // Determine Nature
+        let nature = u > -f ? "Virtual, Upright" : "Real, Inverted";
+        let size = Math.abs(m) > 1 ? "Magnified" : (Math.abs(m) < 1 ? "Diminished" : "Same Size");
+        
+        conclusionText.innerText = `${nature}, ${size}`;
+        conclusionText.style.color = u > -f ? "#D35400" : "#27AE60";
+
+        // Update Math HTML
+        mathPanel.innerHTML = `
+            <strong>Lens Equation:</strong><br>
+            1/f = 1/v - 1/u <br>
+            1/${f} = 1/v - 1/(${u}) <br>
+            <strong>v = ${v.toFixed(1)} cm</strong><br><br>
+            
+            <strong>Magnification:</strong><br>
+            m = v / u <br>
+            m = ${v.toFixed(1)} / ${u} <br>
+            <strong>m = ${m.toFixed(2)}</strong> <br>
+            <small>(Image is ${Math.abs(m).toFixed(2)}x the size of object)</small>
+        `;
+    }
+
+    // Attach Event Listeners
+    uSlider.addEventListener('input', draw);
+    fSlider.addEventListener('input', draw);
+    hSlider.addEventListener('input', draw);
+
+    // Initial Render
+    draw();
+</script>
+
+</body>
+</html>
